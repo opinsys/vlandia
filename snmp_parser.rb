@@ -34,10 +34,8 @@ def fixed_ports(switch)
   end
 end
 
-pp fixed_ports(SWITCH)
-
 # Count of fixed ports
-pp fixed_ports(SWITCH).size
+#pp fixed_ports(SWITCH).size
 
 
 # Find out ports which have tagged VLANs 
@@ -64,7 +62,6 @@ def tagged_ports(switch)
   taggedports.sort.uniq
 end
 
-pp "Ports with tagged VLANs: #{tagged_ports(SWITCH)}" 
 
 # Find out logical LAG-ports
 lagports = %x(snmpwalk -v2c -c public #{SWITCH} IF-MIB::ifType)
