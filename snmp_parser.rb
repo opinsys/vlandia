@@ -4,7 +4,7 @@
 # our switches. We use snmp applications from Net-SNMP for queries and parse
 # the output with ruby.
 # 
-# To understand some port related outputs from a snmp applications, read the
+# To understand some port related outputs from snmp applications, read the
 # following.
 # Example line of command output:
 # Q-BRIDGE-MIB::dot1qVlanStaticUntaggedPorts.1 = Hex-STRING: FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
@@ -38,13 +38,13 @@ end
 #pp fixed_ports(SWITCH).size
 
 
-# Find out ports which have tagged VLANs 
+# Find out ports which have tagged VLANs
 def tagged_ports(switch)
   out = %x(snmpwalk -v 2c -c public #{switch} dot1qVlanStaticUntaggedPorts)
   lines = out.split("\n").select { |line| line.match("Hex-STRING") }
   # Example line of data:
   # Q-BRIDGE-MIB::dot1qVlanStaticUntaggedPorts.1 = Hex-STRING: FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
-  binlines = lines.map do |line| 
+  binlines = lines.map do |line|
     line.split(":")[3]
   end.map do |line|
     line.delete(' ')
@@ -63,27 +63,37 @@ def tagged_ports(switch)
 end
 
 
-# Find out logical LAG-ports
-lagports = %x(snmpwalk -v2c -c public #{SWITCH} IF-MIB::ifType)
-lagports = lagports.split("\n")
-lagports = lagports.select { |line| line.match("ieee8023adLag") }
-lagports = lagports.map { |line| line.match(/[0-9]+/) }
-
-pp "LAG-ports: #{lagports}"
-
-# Find out physical ports in LAGs
-portsinlag = %x(snmpwalk -v2c -c public #{SWITCH} IEEE8023-LAG-MIB::dot3adAggPortListPorts)
-portsinlag = portsinlag.split("\n")
-portsinlag = portsinlag.select { |line| line.match("Hex-STRING") }
-portsinlag = portsinlag.map { |line| line.split(":")[3] }
-portsinlag = portsinlag.map { |line| line.delete(' ') }
-portsinlag = portsinlag.map { |line| line.hex.to_s(2).rjust(line.size*4, '0') }
-
-portsinlagarray = []
-portsinlag.each do |line|
-  new2 = line.split("")
-  new2.each_index { |index| portsinlagarray.push(index + 1) if new2[index] == "1" }   
+# Find out logical LAG ports
+def lag_ports(switch)
+  out = %x(snmpwalk -v2c -c public #{SWITCH} IF-MIB::ifType)
+  lagports = out.split("\n").select do |line|
+    line.match("ieee8023adLag")
+  end.map do |line|
+    line.match(/[0-9]+/)
+  end
 end
 
-pp "Physical ports in LAG: #{portsinlagarray.sort.uniq}"
 
+# Find out physical ports in LAGs
+def ports_in_lag(switch)
+  out = %x(snmpwalk -v2c -c public #{SWITCH} IEEE8023-LAG-MIB::dot3adAggPortListPorts)
+  lines = out.split("\n").select { |line| line.match("Hex-STRING") }
+  # Example line of data:
+  # IEEE8023-LAG-MIB::dot3adAggPortListPorts.54 = Hex-STRING: 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00
+  binlines = lines.map do |line|
+    line.split(":")[3]
+  end.map do |line|
+    line.delete(' ')
+  end.map do |line|
+    line.hex.to_s(2).rjust(line.size*4, '0')
+  end
+
+  portsinlag = []
+  binlines.each do |line|
+    binline = line.split("")
+    binline.each_index do |index|
+       portsinlag.push(index + 1) if binline[index] == "1"
+    end
+  end
+  portsinlag.sort.uniq
+end
