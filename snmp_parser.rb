@@ -1,5 +1,20 @@
 #!/usr/bin/ruby
 
+# In this file we define methods to get different kinds of information from
+# our switches. We use snmp applications from Net-SNMP for queries and parse
+# the output with ruby.
+# 
+# To understand some port related outputs from a snmp applications, read the
+# following.
+# Example line of command output:
+# Q-BRIDGE-MIB::dot1qVlanStaticUntaggedPorts.1 = Hex-STRING: FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+# One hex value is representing 4 switch ports. When a hex value is 
+# converted to a binary value, it consists of 4 numbers that can only
+# be 0's or 1's. Binary state tells if a certain port setting is on or off.
+# First hex from left represents ports 1-4, second one ports
+# 5-8, and so on. From left to right, first comes the fixed ports and
+# then the logical ports. 
+
 require 'pp'
 
 SWITCH = "sw1"
@@ -26,23 +41,33 @@ pp fixed_ports(SWITCH).size
 
 
 # Find out ports which have tagged VLANs 
-tagged = %x(snmpwalk -v 2c -c public #{switch} dot1qVlanStaticUntaggedPorts)
-tagged = tagged.split("\n")
-tagged = tagged.select { |line| line.match("Hex-STRING") }
-tagged = tagged.map { |line| line.split(":")[3] }
-tagged = tagged.map { |line| line.delete(' ') }
-tagged = tagged.map { |line| line.hex.to_s(2).rjust(line.size*4, '0') }
-
-taggedports = []
-tagged.each do |line|
-  new = line.split("")
-  new.each_index { |index| taggedports.push(index + 1) if new[index] == "0" }
+def tagged_ports(switch)
+  out = %x(snmpwalk -v 2c -c public #{switch} dot1qVlanStaticUntaggedPorts)
+  lines = out.split("\n").select { |line| line.match("Hex-STRING") }
+  # Example line of data:
+  # Q-BRIDGE-MIB::dot1qVlanStaticUntaggedPorts.1 = Hex-STRING: FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+  binlines = lines.map do |line| 
+    line.split(":")[3]
+  end.map do |line|
+    line.delete(' ')
+  end.map do |line|
+    line.hex.to_s(2).rjust(line.size*4, '0')
+  end
+ 
+  taggedports = []
+  binlines.each do |line|
+    binline = line.split("")
+    binline.each_index do |index|
+      taggedports.push(index + 1) if binline[index] == "0"
+    end
+  end
+  taggedports.sort.uniq
 end
 
-pp "Ports with tagged VLANs: #{taggedports.sort.uniq}" 
+pp "Ports with tagged VLANs: #{tagged_ports(SWITCH)}" 
 
 # Find out logical LAG-ports
-lagports = %x(snmpwalk -v2c -c public #{switch} IF-MIB::ifType)
+lagports = %x(snmpwalk -v2c -c public #{SWITCH} IF-MIB::ifType)
 lagports = lagports.split("\n")
 lagports = lagports.select { |line| line.match("ieee8023adLag") }
 lagports = lagports.map { |line| line.match(/[0-9]+/) }
@@ -50,7 +75,7 @@ lagports = lagports.map { |line| line.match(/[0-9]+/) }
 pp "LAG-ports: #{lagports}"
 
 # Find out physical ports in LAGs
-portsinlag = %x(snmpwalk -v2c -c public #{switch} IEEE8023-LAG-MIB::dot3adAggPortListPorts)
+portsinlag = %x(snmpwalk -v2c -c public #{SWITCH} IEEE8023-LAG-MIB::dot3adAggPortListPorts)
 portsinlag = portsinlag.split("\n")
 portsinlag = portsinlag.select { |line| line.match("Hex-STRING") }
 portsinlag = portsinlag.map { |line| line.split(":")[3] }
