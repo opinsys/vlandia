@@ -2,7 +2,28 @@
 
 require 'pp'
 
-switch = "sw1"
+SWITCH = "sw1"
+
+# Find out all fixed ports
+def fixed_ports(switch)
+  out = %x(snmpwalk -v2c -c public #{switch} IF-MIB::ifType)
+  lines = out.split("\n")
+  # Some example lines of data:
+  # IF-MIB::ifType.24 = INTEGER: ethernetCsmacd(6)
+  # IF-MIB::ifType.53 = INTEGER: other(1)
+  # IF-MIB::ifType.54 = INTEGER: ieee8023adLag(161)
+  lines.select do |line|
+    line.match("ethernetCsmacd")
+  end.map do |line|
+    line.match(/[0-9]+/)
+  end
+end
+
+pp fixed_ports(SWITCH)
+
+# Count of fixed ports
+pp fixed_ports(SWITCH).size
+
 
 # Find out ports which have tagged VLANs 
 tagged = %x(snmpwalk -v 2c -c public #{switch} dot1qVlanStaticUntaggedPorts)
